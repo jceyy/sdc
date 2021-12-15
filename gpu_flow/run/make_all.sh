@@ -1,0 +1,16 @@
+make clean
+make circle
+make convert
+make convert2
+make diskarray
+make dispersion
+make dispersion2
+make distribution
+make distribution2
+make extractvel
+make extractvel2
+make mcircle
+make mperiodic
+make path
+make periodic
+make rectangle
