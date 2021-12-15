@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <time.h>
 
 #include "coloring.h"
 #include "defines.h"
@@ -60,37 +61,41 @@ public:
 			cly = readData.GetNewest()->H().cly;
 			clz = readData.GetNewest()->H().clz;
 			dataSz = readData.GetNewest()->Size();
-			data = readData.GetBest()->Data();
+			data = readData.GetNewest()->Data();
 	    }
     }
 };
 
-
 int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
 {
-    // define variables for the code
-    bool quit_visual(false);
-    size_t Nx(0), Ny(0);//, Nz(0);
-    int COLORATION=0;
-    int pitch = 0, pitchCst=1;
+	srand(time(NULL));
+
+    bool quit_visual(false), isFullscreen(false);
+    size_t Nx(0), Ny(0); 
+    int pitch(0), pitchCst(1);
     unsigned int format;
-    int previousNt(0);
+    size_t previousNt(0);
 
-    float minCoeff=0.0, maxCoeff=1.0;
-
-    // create a pointer to the file we want to read (read only, "r") from
-    FILE *cfgFluidFile = nullptr;
-    cfgFluidFile = fopen("config/fluid_config.txt", "r");
+    float tempMin(0.f), tempMax(0.f), tempRange(1.f);
+    #ifdef TRACK_VALUES 
+    float tempRms(0.f);
+	#endif // TRACK_VALUES
+	#ifdef TIMER
+	size_t ticks(0), frameTime(0), ellapsed(0);
+	#endif // TIMER
+    FILE *cfgFluidFile = fopen("config.txt", "r");
     
-    if (cfgFluidFile != nullptr)// read the data needed if the opening succeeded
+    if (cfgFluidFile != nullptr) // read the data needed if the opening succeeded
     {
-        fscanf(cfgFluidFile, "%lu %lu", &Nx, &Ny);
+        int temp = fscanf(cfgFluidFile, "%lu %lu", &Ny, &Nx);
         fclose(cfgFluidFile);
     }
     else  // default if it was unable to open the configuration file (pointer == NULL)
     {
         Nx = DEFAULT_NX;
         Ny = DEFAULT_NY;
+        cfgFluidFile = fopen("config.txt", "w");
+        fprintf(cfgFluidFile, "%lu %lu", Ny, Nx);
         printf("Unable to load the fluid config file, setting default values Nx = %ld, Ny = %ld\n", Nx, Ny);
     }
 
@@ -101,28 +106,32 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
     Uint8 R(0), G(0), B(0);
     SDL_Texture *texture = nullptr; // create the texture on which the program will write the temperature field
     SDL_Event event; // variable handling the events
-    SDL_Rect pos; // position (in pixels): where to display texture
-    SDL_Point mouse = {event.button.x, event.button.y};
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    //SDL_Rect pos; // position (in pixels): where to display texture
+    SDL_Point cursor, window_sz;
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderClear(renderer);
     SDL_RenderPresent(renderer);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_STREAMING, (int)Nx, (int)Ny); // add null-test
+    if (texture == nullptr)
+    {
+    	cerr << "Unable to create the main texture: " << SDL_GetError() << endl;
+    	return -1;
+    }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
-
+	SDL_GetWindowSize(window, &window_sz.x, &window_sz.y);
 
     // Network sending structure
     NetUserInput netUserInput;
     netUserInput.relPosX = netUserInput.relPosY = 0.5f;
-    netUserInput.radius = 0.1f;
-    netUserInput.temperature = 1.0f;
+    netUserInput.radius = 0.2f;
+    netUserInput.temperature = 0.1f;
     netUserInput.mode = 0;
     
     NetSimInfo netSimInfo;
     
     // Network Setup
-    int cpt1(1);
 
-    uPacket upac;
+    //uPacket upac;
     DataFolder readData;
 
     const char* HostName = "localhost";
@@ -130,25 +139,27 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
     uRequest::ImgType imgtype = uRequest::Temperature;
     RBCClient::ReqType reqNew = RBCClient::newReq;
     RBCClient::ReqType reqCnt = RBCClient::cntReq;
-    DataFolderClient socket(DEFAULT_SERVER_PORT, HostName, cpt1);
+    DataFolderClient socket(DEFAULT_SERVER_PORT, HostName);
     //unsigned short resReq = 0;
-    //ofstream f_out ("Fichier.txt");
     //unsigned int us = 5000;
 
     int fieldInteractionSelector = 1; // before: currentMode. It is sent to the simulation only when a mouse button is pressed. 1 for temperature, 2 for velocity, 0 for nothing
 
-
+	
     while(!quit_visual)
     {
+    	#ifdef TIMER
+    	ticks = SDL_GetTicks();
+    	#endif
         // Events handling loop
         while (SDL_PollEvent(&event)) // while there is still events to catch up
         {  
             switch (event.type) // test the different types of events
             {
-            	#if ALLOW_INTERACTION == true
+            	#ifdef ALLOW_INTERACTION
                 case SDL_MOUSEBUTTONDOWN: // Active: while clicking, change the data field
 
-                    mouse = {event.button.x, event.button.y};
+                    cursor = {event.button.x, event.button.y};
                     //cout << "Mouse button down" << endl; 
                     // Check the collisions
                     /*if (Coll_2AABBs(mouse, setting_position)) // if the moused clicked on the settings icon
@@ -170,9 +181,17 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
                 break;
 
                 case SDL_MOUSEMOTION:
-                	mouse = {event.motion.x, event.motion.y};
-                    netUserInput.relPosX = mouse.x / (float)1280;
-                    netUserInput.relPosY = mouse.y / (float)720;
+                	cursor = {event.motion.x, event.motion.y};
+                    netUserInput.relPosX = cursor.x / (float)window_sz.x;
+                    netUserInput.relPosY = cursor.y / (float)window_sz.y;
+                break;
+                
+                case SDL_FINGERDOWN:
+                case SDL_FINGERMOTION:
+                	cursor = {(int)(event.tfinger.x * window_sz.x), (int)(event.tfinger.y * window_sz.y)};
+                	netUserInput.relPosX = event.tfinger.x;
+                	netUserInput.relPosY = event.tfinger.y;
+                	printf("\nFinger pressure is %.2f\n", event.tfinger.pressure);
                 break;
                 #endif // ALLOW_INTERACTION
 
@@ -183,85 +202,91 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
                     quit_visual = true;
                     goto cleanup; // quit
                     break;
+                    
+                    case SDLK_f:
+                    if (isFullscreen)
+                    {
+                    	SDL_SetWindowFullscreen(window, 0);
+                    	isFullscreen = false;
+                    }
+                    else
+                    {
+                    	SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                    	isFullscreen = true;
+                    }
+                    break;
                 }
                 break;
+
+				case SDL_WINDOWEVENT:
+					if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+					{
+						window_sz.x = event.window.data1;
+						window_sz.y = event.window.data2;
+					}
+				break;
                 
-                case SDL_QUIT: // if a key was pressed
+                case SDL_QUIT: // if the user wants to quit (Alt + F4 or clicked on "close")
                 goto cleanup;
                 break;
             }
         }// End of events loop        
-
-
+		#ifdef TIMER
+		ellapsed = SDL_GetTicks() - ticks;
+    	ticks = SDL_GetTicks();
+    	frameTime += ellapsed;
+    	printf("Events handled in %lu ms\t", ellapsed);
+    	#endif
         // Network communication part
-        socket.Receive(&netUserInput, &readData, reqNew, imgtype, Nx);
-        /*if(netSimInfo.nr > 0 || true)
-        {
-            for(int volatile e(0); e<400; e++)
-            {
-                socket.Receive(&netUserInput, &readData, reqCnt, imgtype, Nx); // receive data
-                //cout << "nr = " << (int)nr << endl;
-            }
-            //cout << "nr = " << (int)nr << endl;
-		//cout << "Socket received" << endl;
-        }*/
-        /*volatile int e(0);
-        do
-        {
-        	socket.Receive(&netUserInput, &readData, reqCnt, imgtype, Nx); e++;
-        	if(readData.GetBest() != 0 && readData.GetNewest()->CountPackets() <= 0)
-        		break;
-        }while(false && readData.GetNewest()->CountPackets() > 0 || e < 2 && true);*/
-
-        //socket.Receive(&netUserInput, &readData, reqCnt, imgtype, Nx);
-        
-		if(readData.GetBest() != 0) // get the best image
+		socket.Receive(&netUserInput, &readData, reqNew, imgtype, Nx);
+		if(readData.GetNewest() != 0) // get the newest / best image
 		{
-			/*auto tempv(readData.GetBest());
-			while (tempv->NumPackets() > 0)
+			netSimInfo.update(readData, false);
+			if (netSimInfo.Nt == previousNt) ;//goto receive;
+			else previousNt = netSimInfo.Nt;
+
+			while (readData.GetNewest()->Completeness() < 1.0f)
 			{
 				socket.Receive(&netUserInput, &readData, reqCnt, imgtype, Nx);
-			}*/
-			
-			netSimInfo.update(readData, false);
-			if (netSimInfo.Nt == previousNt)
-				continue;
-			else
-				previousNt = netSimInfo.Nt;
-				
+			}
+			#ifdef TIMER
+			ellapsed = SDL_GetTicks() - ticks;
+			ticks = SDL_GetTicks();
+			frameTime += ellapsed;
+			printf("Network handled in %lu ms\t", ellapsed);
+			#endif
+
 			size_t j(0), k(0);
-			float _temp_average(0.f); // for debugging only
-			//minCoeff = maxCoeff = 0.f;
+			tempMin = tempMax = 0.f;
+
 			for (size_t i(0); i < netSimInfo.dataSz; i++)
 			{
 			    j = i%Nx;
-			    if (netSimInfo.data[i] != 0.0f || true) // use "true" to ignore 0.0 values
-			    {
-			        temperature[j][k] = netSimInfo.data[i];//*(pointerData + i);
-			        //cout << netSimInfo.data[i] << " ";
-			        _temp_average += temperature[j][k] * temperature[j][k];
-			    }
+			    //if (netSimInfo.data[i] != 0.0f || true) // use "true" to ignore 0.0 values
+			    //{
+			        temperature[j][k] = netSimInfo.data[i];
+			        #ifdef TRACK_VALUES
+			        tempRms += netSimInfo.data[i] * netSimInfo.data[i];
+			        #endif // TRACK_VALUES
+			    //}
 
-			    if (temperature[j][k] < minCoeff)
-			    	minCoeff = temperature[j][k];
-			    else if (temperature[j][k] > maxCoeff)
-			    	maxCoeff = temperature[j][k];
+			    if (temperature[j][k] < tempMin)
+			    	tempMin = temperature[j][k];
+			    else if (temperature[j][k] > tempMax)
+			    	tempMax = temperature[j][k];
 
 			    if (j == 0 && i > 0) k++;
-			} //cout << endl;
-			
-			//_temp_average /= (float)netSimInfo.dataSz; // mean square value: divide by Nx*Ny, or data size
-			cout << "Nt = " << netSimInfo.Nt << ", Nx*Ny = " << netSimInfo.dataSz << ", (Pr, Ra, eta) = (" << netSimInfo.Pr <<
-			", " << netSimInfo.Ra << ", " << netSimInfo.eta << "), (clx, cly) = (" << netSimInfo.clx << ", " << netSimInfo.cly << 
-			"), dt = " << netSimInfo.dt << ", (Nx, Ny) = (" << netSimInfo.Nx << ", " << netSimInfo.Ny << ")" <<
-			", rms² value is " << (float)_temp_average << endl;
-			//_temp_average = 0;
-			
-			/*volatile float temp_ = minCoeff;
-			minCoeff=maxCoeff;
-			maxCoeff=temp_; //*/
-			
-			//readData.hasChangedReset();
+			}
+			tempRange = tempMax - tempMin;
+			#ifdef TIMER
+			ellapsed = SDL_GetTicks() - ticks;
+			ticks = SDL_GetTicks();
+			frameTime += ellapsed;
+			printf("Temperature field update handled in %lu ms\t", ellapsed);
+			#endif
+			//printf("Nt = %lu, (Nx, Ny, clx, cly) = (%lu, %lu, %.1f, %.1f), (Ra, Pr, eta) = (%.2f, %.2f, %.2f), dt = %.3f, ",
+			//netSimInfo.Nt, netSimInfo.Nx, netSimInfo.Ny, netSimInfo.clx, netSimInfo.cly, netSimInfo.Ra, netSimInfo.Pr, netSimInfo.eta, netSimInfo.dt);
+			//printf("data size = %lu, Trms = %.4f, (Tmin, Tmax) = (%.4f, %.4f)\n", netSimInfo.dataSz, sqrt(_temp_average), minCoeff, maxCoeff);
 		}
 		else
 		{
@@ -283,56 +308,40 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
         }
         pitchCst = (pitch / sizeof(unsigned int));
 
-        /*#if PRINT_INFOS==1
-        timer_global.update(); // Measuring timing
-        time = timer_global.getTime_millis();
-        #endif*/
-
         for (size_t i(0); i < Nx; i++) // Creating texture
         {
             for (size_t j(0); j < Ny; j++)
             {
-				/*if (COLORATION == 1) colorScale1(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B);
-				else if (COLORATION == 2) colorScale2(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B);
-				else if (COLORATION == 3) colorScale3(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B);
-				else if (COLORATION == 4) colorScale4(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B);
-				else if (COLORATION == 5) grayScale2(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B);
-				else grayScale1(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B); // default choice
 				// update the value of the pixel color under the form of an 24 bit number 8 bits for each color*/
+				grayScale1(tempMin, tempRange, temperature[i][j], &R, &G, &B); // default choice
 				pixels[j * pitchCst + i] =  R<<16 | G<<8 | B;
-				grayScale1(minCoeff, maxCoeff, temperature[i][j], &R, &G, &B); // default choice
-				// cout << "(r, g, b) = (" << (int)R << ", " << (int)G << ", " << (int)B << ")" << endl;
             }
         }
         SDL_UnlockTexture(texture); // stop writing on the texture and make it available again for display
-        pos = {0, 0, 1280, 720};//(int)Nx, (int)Ny};
         SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, &pos);
+        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
-
-        /*if (bool_infos) // if displaying the informations
-        {
-            factor=1.0f;
-            posx0=50; posy0=200;
-            nn=0; nnmax=0;
-
-            // preparing the strings
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Ra : %d", netInData.Ra); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Eta : %.3f", netInData.eta); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Pr : %.3f", netInData.Pr); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "dt : %.3f", netInData.dt); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Cube length : %.3f x %.3f x %.3f", netInData.clx, netInData.cly, netInData.clz); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Iteration : %d", netInData.Nt); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Mouse position : %.3f  %.3f", netUserInput.posX, netUserInput.posY); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Mouse velocity : %.3f  %.3f", netUserInput.velX, netUserInput.velY); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Modification mode : %d (1 = temperature, 2 = speed)", currentMode); nnmax++;
-            strcpy(text[nnmax], ""); sprintf(text[nnmax], "Coloration : %d", COLORATION); nnmax++;
-
-        }*/
-           
-    }
+        
+        #ifdef TIMER
+        ellapsed = SDL_GetTicks() - ticks;
+    	ticks = SDL_GetTicks();
+    	frameTime += ellapsed;
+		printf("Texture preparation handled in %lu ms\t", ellapsed);
+		printf("Total frametime of %lu ms (%.2f fps)\t", frameTime, 1000.f/frameTime);
+		frameTime = 0;
+		#endif
+		#ifdef TRACK_VALUES
+		tempRms = sqrt(tempRms/(float)netSimInfo.dataSz); // mean square value: divide by Nx*Ny, or data size
+		printf("Nt = %lu, t = %.3f, dt = %.3f, (Tmin, Tmax) = (%.4f, %.4f), Trms = %.4f", netSimInfo.Nt, netSimInfo.dt * netSimInfo.Nt, netSimInfo.dt, tempMin, tempMax, tempRms);
+		tempRms = 0;
+		#endif // TRACK_VALUES
+		#if defined TIMER || defined TRACK_VALUES
+		cout << endl;
+		#endif
+	}
 
     cleanup: // 3D array cleanup
+    cout << "Quitting..." << endl;
 	SDL_DestroyTexture(texture); // free the memory occupied by the texture    
 
     return 0;
@@ -342,96 +351,5 @@ int SimVisual(SDL_Window* window, SDL_Renderer* renderer)
 int run(SDL_Window* window, SDL_Renderer* renderer)
 {
 	return SimVisual(window, renderer);
-    /*SDL_SetRenderDrawColor(renderer_GLOBAL, 255, 255, 255, 255);
-    SDL_RenderClear(renderer_GLOBAL);
-    SDL_RenderPresent(renderer_GLOBAL);
-
-    const int CST=1;
-    PRL_MenuButton button1[CST]; // now obsolete class, to be replaced soon in PRL framework
-
-    for (int i=0; i<CST; i++) // here CST is used for a more general case using more than 1 button
-    {
-        button1[i].setRenderer(renderer_GLOBAL);
-        button1[i].setCenter(config_GLOBAL.renderResolution.x/2, config_GLOBAL.renderResolution.y/2);
-        button1[i].loadIdleTexture("data/4K_start_button_idle.png");
-        button1[i].loadSelecTexture("data/4K_start_button_selec.png");
-        button1[i].setUse2States(true); // use idle and selected
-    }
-
-    SDL_Event event;
-    int quit=0;
-
-    while (!quit)
-    {
-        SDL_WaitEvent(&event); // wait for events and delay the program until an interruption occurs
-        switch (event.type)
-        {
-        case SDL_QUIT:
-            quit=1;
-            return PRL_RETURN_QUIT;
-            break;
-
-        case SDL_WINDOWEVENT:
-            if (event.window.type==SDL_WINDOWEVENT_CLOSE)
-            {
-                quit=1;
-                return PRL_RETURN_QUIT;
-            }
-        break;
-
-        case SDL_KEYDOWN:
-            if (event.key.keysym.sym==SDLK_ESCAPE)
-            {
-                quit=1;
-                return PRL_RETURN_QUIT;
-            }
-            else if (event.key.keysym.sym==SDLK_SPACE||event.key.keysym.sym==SDLK_RETURN)
-            {
-                if(SimVisual()==PRL_RETURN_QUIT) {quit=1; return PRL_RETURN_QUIT;}
-            }
-            break;
-
-        case SDL_MOUSEMOTION:
-            PRL_Point p;
-            p.x=event.motion.x;
-            p.y=event.motion.y;
-            PRL_Rect r;
-            for (int i=0; i<CST; i++)
-            {
-                r.x=button1[i].getCenter().x-button1[i].getSize().x/2.0;
-                r.y=button1[i].getCenter().y-button1[i].getSize().y/2.0;
-                r.w=button1[i].getSize().x;
-                r.h=button1[i].getSize().y;
-
-                button1[i].setIdle(!Coll_PointAABB(p, r));
-                button1[i].update();
-            }
-            break;
-
-        case SDL_MOUSEBUTTONDOWN:
-            PRL_Point p2={event.button.x, event.button.y};
-            PRL_Rect r2;
-            for (int i=0; i<CST; i++)
-            {
-                r2.x=button1[i].getCenter().x-button1[i].getSize().x/2.0;
-                r2.y=button1[i].getCenter().y-button1[i].getSize().y/2.0;
-                r2.w=button1[i].getSize().x;
-                r2.h=button1[i].getSize().y;
-                if (Coll_PointAABB(p2, r2))
-                {
-                    if(SimVisual()==PRL_RETURN_QUIT) {quit=1; return PRL_RETURN_QUIT;}
-                }
-            }
-            break;
-        }
-
-        SDL_RenderClear(renderer_GLOBAL);
-
-        for (int i=0; i<CST; i++)
-        {
-            SDL_RenderCopy(renderer_GLOBAL, button1[i].getDispTexture(), NULL, button1[i].getDispPosition());
-        }
-        SDL_RenderPresent(renderer_GLOBAL);
-    }*/
-    //return 0;
 }
+

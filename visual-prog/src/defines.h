@@ -1,13 +1,14 @@
 #ifndef DEFINES_H_INCLUDED
 #define DEFINES_H_INCLUDED
 
-#define ALLOW_INTERACTION true // covid: do not incitate to touch the screen
-#define DEFAULT_NX 512
-#define DEFAULT_NY 512
+//#define ALLOW_INTERACTION // covid: do not incitate to touch the screen
+//#define TRACK_VALUES // display position, mode ...
+#define DEFAULT_NX 1280
+#define DEFAULT_NY 720
 #define DEFAULT_SERVER_PORT 1234
 
 #define PRINT_INFOS 0 // display read and texture creation times
-#define TRACKVALUES 0 // display position, mode ...
+
 #define KEEP_FIRST_COEFF 0 // whether to keep the same color scale or update it at each frame
 
 #define MAX_COLORATION 5 // number of different coloration types (1 to MAX_COLORATION plus a default one)

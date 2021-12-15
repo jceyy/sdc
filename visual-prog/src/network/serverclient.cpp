@@ -325,7 +325,7 @@ RBCClient::~RBCClient()
 
         return 0;
     }
-/*
+
     ssize_t NByte;
     unsigned int AddrSize;
     struct sockaddr_in ClientAddr;

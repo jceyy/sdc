@@ -1,0 +1,4 @@
+Install the following things:
+- Cuda documentation, section 1 to 2.4 https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#ubuntu-installation
+- Download cuda using command line as explained here (Ubuntu 20.04, 64bits system, deb (local)) https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=20.04&target_type=deb_local
+- run the terminal command: sudo apt install nvidia-cuda-toolkit

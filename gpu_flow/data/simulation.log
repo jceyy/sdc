@@ -1,0 +1,16 @@
+GPU device 0: NVIDIA GeForce GTX 1080 Ti
+Simulation of Rayleigh-Benard convection
+Rayleigh-Number: 2650
+Prandtl-Number: 0.96
+delta t: 0.02
+final t: 60000
+number of files: 1
+number of iterations: 3000000
+eta(penalization): 0
+cube length x direction: 108
+cube length y direction: 192
+cube length z direction: 1
+number of x modes: 720
+number of y modes: 1280
+number of z modes: 2
+command string: ./rayleigh_periodic -device 0 -nmodes 720 1280 2 -clength 108 192 -ra 2650 -pr 0.96 -eta 0.01 -dt 0.02 -t 60000 

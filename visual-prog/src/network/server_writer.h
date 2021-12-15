@@ -1,13 +1,12 @@
 #ifndef SERVER_WRITER_H
 #define SERVER_WRITER_H
 
-#include "/home/ecps/Desktop/Finished project/gpu_flow/code/code/cuda_defines.h"
+#include "../../../gpu_flow/code/cuda_defines.h"
+#include "../../../gpu_flow/code/matrix/matrix_folder.h"
+#include "../../../gpu_flow/code/matrix/matrix_host_iterator.h"
+#include "../../../gpu_flow/code/operator/calculate_temperature_operator.h"
+#include "../../../gpu_flow/code/particle/particle_tracer.h"
 #include "serverclient.h"
-#include "/home/ecps/Desktop/Finished project/gpu_flow/code/code/matrix/matrix_folder.h"
-#include "/home/ecps/Desktop/Finished project/gpu_flow/code/code/matrix/matrix_host_iterator.h"
-#include "/home/ecps/Desktop/Finished project/gpu_flow/code/code/operator/calculate_temperature_operator.h"
-#include "/home/ecps/Desktop/Finished project/gpu_flow/code/code/particle/particle_tracer.h"
-
 
 /****************************************************************************
 ** This class manages the connection of the RBC GPU code to the UDP server

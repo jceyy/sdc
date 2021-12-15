@@ -2,15 +2,15 @@
 #include <SDL2/SDL.h>
 using namespace std;
 
-void grayScale1(float minCoeff, float maxCoeff, float value, Uint8* r, Uint8* g, Uint8* b)
+void grayScale1(float tempMin, float tempRange, float value, Uint8* r, Uint8* g, Uint8* b)
 {
-    *r = *g = *b = (Uint8) 255.0f*(value-minCoeff)/(maxCoeff-minCoeff);
+    *r = *g = *b = (Uint8) 255.0f * (value - tempMin) / tempRange;
 }
 
-void grayScale2(float minCoeff, float maxCoeff, float value, Uint8* r, Uint8* g, Uint8* b)
+void grayScale2(float tempMin, float tempRange, float value, Uint8* r, Uint8* g, Uint8* b)
 {
-    float temp = (value-minCoeff)/(maxCoeff-minCoeff);
-    (*r) = (*g) = (*b) = (Uint8) 255.0f*temp*temp;
+    float temp = (value - tempMin) / tempRange;
+    (*r) = (*g) = (*b) = (Uint8) 255.0f * temp * temp;
 }
 
 void colorScale1(float minCoeff, float maxCoeff, float value, Uint8 *r, Uint8 *g, Uint8 *b)

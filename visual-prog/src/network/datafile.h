@@ -81,7 +81,7 @@ private:
 class DataFolderClient : public RBCClient
 {
 public:
-    DataFolderClient(unsigned int Port, const char* HostName, int cpt1)
+    DataFolderClient(unsigned int Port, const char* HostName)
         : RBCClient(Port, HostName) {}
 private:
     int Add(uPacket& inData, void* outData) {
