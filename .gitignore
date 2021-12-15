@@ -1,0 +1,7 @@
+visual-prog/build/*
+gpu_flow/run/obj_*
+gpu_flow/run/rayleigh_*
+gpu_flow/run/distribution
+gpu_flow/run/dispersion
+gpu_flow/run/convert
+gpu_flow/run/extractvel

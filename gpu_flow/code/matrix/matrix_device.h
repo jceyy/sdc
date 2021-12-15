@@ -4,6 +4,7 @@
 //system includes
 #include <cuda.h>
 #include <vector>
+#include <cstdio>
 
 //my includes
 #include "../cuda_defines.h"
